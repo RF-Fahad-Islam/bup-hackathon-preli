@@ -56,7 +56,7 @@ BUP CSE Fest 2026 · GridWise preliminary.
 | Optimizer | `POST https://gridwise-bup.fly.dev/optimize-energy` |
 | Repository | <https://github.com/RF-Fahad-Islam/bup-hackathon-preli> |
 | Docker image | `docker.io/fahad9767/gridwise:1.0.0` (see [Docker Fallback](#docker-fallback)) |
-| Solution video | `<video-link>` *(3 min; script in [docs/VIDEO_GUIDE.md](docs/VIDEO_GUIDE.md))* |
+| Solution video | `[<video-link>](https://drive.google.com/file/d/1d5VDubOE5jcdonxnRdXQMOmYk2yjYPwf/view?usp=sharing)`|
 
 No login, API key or VPN is needed to call the endpoint. It runs on Fly.io with at least one machine always on, so there are no cold starts.
 
