@@ -6,23 +6,41 @@ BUP CSE Fest 2026 · GridWise preliminary.
 
 **Contents:**
 [Overview](#overview) ·
+
 [Architecture](#architecture) ·
+
 [Request Processing Flow](#request-processing-flow) ·
+
 [Tech Stack](#tech-stack) ·
+
 [LLM & Model](#llm--model) ·
+
 [Directive Interpretation](#directive-interpretation) ·
+
 [Deterministic Guardrails](#deterministic-guardrails) ·
+
 [Optimization Model](#optimization-model) ·
+
 [Final Validation](#final-validation) ·
+
 [Environment Variables](#environment-variables) ·
+
 [Local Quickstart](#local-quickstart) ·
+
 [API](#api) ·
+
 [Testing](#testing) ·
+
 [Docker Fallback](#docker-fallback) ·
+
 [Error Handling](#error-handling) ·
+
 [Performance Notes](#performance-notes) ·
+
 [Security & Secret Handling](#security--secret-handling) ·
+
 [Known Limitations](#known-limitations) ·
+
 [Dependencies / Credits](#dependencies--credits)
 
 ---
