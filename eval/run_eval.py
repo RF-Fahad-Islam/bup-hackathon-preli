@@ -1,7 +1,8 @@
 """Paraphrase robustness eval: runs the real interpretation pipeline on labelled notes.
 
-Usage:  OPENROUTER_API_KEY=... GROQ_API_KEY=... python -m eval.run_eval [--strong-only] [--pace SECONDS]
-(--pace waits between batches, e.g. to stay inside a free tier's tokens-per-minute limit)
+Usage:  OPENROUTER_API_KEY=... GROQ_API_KEY=... python -m eval.run_eval [--strong-only] [--pace SECONDS] [--file NAME]
+(--pace waits between batches, e.g. to stay inside a free tier's tokens-per-minute limit;
+ --file picks a case file in eval/, default paraphrases.jsonl, e.g. adversarial.jsonl)
 Notes are sent in batches of 3 (the maximum per scenario), with the cache disabled.
 """
 import asyncio
@@ -17,8 +18,8 @@ from app.schemas import BatterySpec
 HERE = Path(__file__).parent
 
 
-async def main(force_strong: bool, pace: float):
-    cases = [json.loads(line) for line in (HERE / "paraphrases.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+async def main(force_strong: bool, pace: float, case_file: str):
+    cases = [json.loads(line) for line in (HERE / case_file).read_text(encoding="utf-8").splitlines() if line.strip()]
     ok, paths = 0, {}
     async with httpx.AsyncClient() as client:
         i = 0
@@ -44,11 +45,12 @@ async def main(force_strong: bool, pace: float):
                         and (c["value"] is None or (d.value is not None and abs(d.value - c["value"]) < 1e-3)))
                 ok += good
                 if not good:
-                    print(f"MISS [{res.path}] {c['note']}\n   want {c['type']} {c['hours']} {c['value']}"
+                    print(f"MISS [{res.path}] {c.get('id', '')} {c['note']}\n   want {c['type']} {c['hours']} {c['value']}"
                           f"\n   got  {d.directive_type} {list(d.hours)} {d.value}")
     print(f"\n{ok}/{len(cases)} correct; batch paths: {paths}")
 
 
 if __name__ == "__main__":
     pace = float(sys.argv[sys.argv.index("--pace") + 1]) if "--pace" in sys.argv else 0.0
-    asyncio.run(main("--strong-only" in sys.argv, pace))
+    case_file = sys.argv[sys.argv.index("--file") + 1] if "--file" in sys.argv else "paraphrases.jsonl"
+    asyncio.run(main("--strong-only" in sys.argv, pace, case_file))
