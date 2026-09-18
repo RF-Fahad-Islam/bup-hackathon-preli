@@ -3,6 +3,7 @@
 Independent of the optimizer: it only sees the published plan, the request
 and the merged constraints, and it recomputes the totals from the plan.
 """
+import math
 from dataclasses import dataclass
 
 from .directives import HourlyConstraints
@@ -34,6 +35,9 @@ def replay(plan: list[dict], hours: list[HourSlot], battery: BatterySpec, cons: 
         h = p["hour"]
         g, s, a, b, after = (p["grid_kwh"], p["solar_used_kwh"], p["battery_action"],
                              p["battery_kwh"], p["battery_energy_after_kwh"])
+        for name, val in (("grid", g), ("solar_used", s), ("battery_kwh", b), ("battery_energy_after", after)):
+            if not math.isfinite(val):
+                v.append(f"h{h}: non-finite {name}")
         for name, val in (("grid", g), ("solar_used", s), ("battery_kwh", b)):
             if val < -TOL:
                 v.append(f"h{h}: negative {name}")

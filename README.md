@@ -17,7 +17,7 @@ BUP CSE Fest 2026 · GridWise preliminary.
 [Public sample testing](#public-sample-testing) ·
 [Testing strategy](#testing-strategy) ·
 [Reliability / failure handling](#reliability--failure-handling) ·
-[Docker fallback](#docker-fallback) ·
+[Docker](#docker) ·
 [Project structure](#project-structure) ·
 [Architectural decisions](#architectural-decisions) ·
 [Security](#security) ·
@@ -31,10 +31,11 @@ BUP CSE Fest 2026 · GridWise preliminary.
 
 | | |
 |---|---|
-| Base URL | `https://<fly-app>.fly.dev` *(fill in after deploy)* |
-| Health check | `GET https://<fly-app>.fly.dev/health` → `{"status":"ok"}` |
-| Optimizer | `POST https://<fly-app>.fly.dev/optimize-energy` |
-| Docker fallback | `docker.io/<dockerhub-user>/gridwise:v1.0.0` *(fill in after push)* |
+| Base URL | `https://gridwise-bup.fly.dev` |
+| Health check | `GET https://gridwise-bup.fly.dev/health` → `{"status":"ok"}` |
+| Optimizer | `POST https://gridwise-bup.fly.dev/optimize-energy` |
+| Fly dashboard | <https://fly.io/apps/gridwise-bup> |
+| Docker image | build locally from the [Dockerfile](Dockerfile) — see [Docker](#docker) below |
 | Solution video | `<video-link>` *(3 min; script in [docs/VIDEO_GUIDE.md](docs/VIDEO_GUIDE.md))* |
 
 No login, API key or VPN is needed to call the endpoint. It runs on Fly.io with at least one machine always on, so there are no cold starts.
@@ -255,7 +256,7 @@ On Windows PowerShell, type `curl.exe` instead of `curl`, and use `127.0.0.1` ra
 
 ### `GET /health`
 ```bash
-curl https://<fly-app>.fly.dev/health
+curl https://gridwise-bup.fly.dev/health
 ```
 ```json
 {"status": "ok"}
@@ -327,7 +328,7 @@ What this example shows:
 | Status | When |
 |---|---|
 | 200 | Success |
-| 400 | Broken JSON, missing or wrong-typed fields, not exactly 24 unique hours 0–23, 0 or more than 3 notes, blank note |
+| 400 | Broken JSON, missing or wrong-typed fields, not exactly 24 unique hours 0–23, 0 or more than 3 notes, blank note, blank `scenario_id`, negative tariff |
 | 422 | Valid JSON that is physically impossible (for example, the starting level is outside the battery limits), or no plan can satisfy the notes even after a second reading |
 | 502 | The language model is unavailable and the notes couldn't be read safely |
 | 500 | Controlled internal error |
@@ -355,6 +356,8 @@ It accepts equivalent optimal schedules, as the official rules allow.
 
 **Current result:** `10/10 samples passed` with Groq, each at the exact reference cost. The slowest request took 0.84 s.
 
+Also verified directly against the live deployment (<https://gridwise-bup.fly.dev>): all 10 official samples returned `HTTP 200` with valid plans (e.g. SAMPLE-02 → `total_cost_bdt: 42885.0`).
+
 | Sample | What it tests | Result |
 |---|---|---|
 | 01 | Solar cleaning + distractor | ✅ |
@@ -377,7 +380,7 @@ There are four layers. Each proves a different thing.
 **1. Unit and API tests.** These make no network calls because the LLM is faked, and they finish in about 2 seconds.
 ```bash
 pip install -r requirements-dev.txt
-pytest -q          # 89 passed
+pytest -q          # 305 passed
 ```
 
 | Test file | What it proves |
@@ -389,16 +392,20 @@ pytest -q          # 89 passed
 | `tests/test_official_samples.py` | All 10 official samples reach the exact reference cost, and the tripwire never contradicts a reference reading |
 | `tests/test_tripwire.py` | The tripwire reads common phrasings and stays silent when a note is ambiguous |
 | `tests/test_llm_chain.py` | Provider fallback, cool-downs, per-model rate-limit handling |
+| `tests/test_adversarial_dataset.py` | Every expected label in `eval/adversarial.jsonl` passes the response schema and guardrail bounds on its own |
 
 **2. Public samples.** These run against the live service, as shown in [Public sample testing](#public-sample-testing).
 
-**3. Paraphrase robustness.** This uses the real LLM. The hidden tests re-word notes, so we wrote 42 labelled paraphrases covering all six directive types. They include "one-fifth of normal", "80% reduction" vs "drops to 20%", 24-hour times, noon and midnight, "10 PM to 2 AM", "onwards", % of capacity, and "tomorrow" distractors.
+**3. Paraphrase and adversarial robustness.** These use the real LLM. The hidden tests re-word notes, so we wrote labelled cases the model has never seen:
+- `eval/paraphrases.jsonl` — 42 cases covering all six directive types: "one-fifth of normal", "80% reduction" vs "drops to 20%", 24-hour times, noon and midnight, "10 PM to 2 AM", "onwards", % of capacity, and "tomorrow" distractors.
+- `eval/adversarial.jsonl` — 180 harder cases targeting the model's remaining attack surface (indirect wording, percent inversion, inclusive/exclusive hour traps, no_op distractors dense with energy vocabulary, notes about other days). See [`eval/ADVERSARIAL.md`](eval/ADVERSARIAL.md) for the full catalogue and rationale.
 ```bash
-python -m eval.run_eval              # full pipeline
-python -m eval.run_eval --pace 20    # wait 20 s between batches (free-tier rate limits)
+python -m eval.run_eval                              # paraphrases.jsonl, full pipeline
+python -m eval.run_eval --pace 20                     # wait 20 s between batches (free-tier rate limits)
 python -m eval.run_eval --strong-only
+python -m eval.run_eval --file adversarial.jsonl --pace 10
 ```
-**Result: 42/42 correct.**
+**Result: 42/42 on paraphrases**, with Groq's free-tier rate limit as the main source of run-to-run noise (a rate-limited request falls back to a cheap/degraded reading rather than failing outright, which the eval reports separately by `path`).
 
 **4. Replay in production.** Every response is re-checked by `app/replay.py` before it is sent.
 
@@ -422,12 +429,16 @@ python -m eval.run_eval --strong-only
 
 ---
 
-## Docker fallback
+## Docker
+
+The live deployment at <https://gridwise-bup.fly.dev> runs from this same [Dockerfile](Dockerfile) — Fly.io builds the image remotely (via its Depot builder), so no local Docker install is required to deploy. The image also builds and runs cleanly locally:
 
 ```bash
-docker pull docker.io/<dockerhub-user>/gridwise:v1.0.0
-docker run --rm -p 8080:8080 -e GROQ_API_KEY=gsk_your_key_here docker.io/<dockerhub-user>/gridwise:v1.0.0
+docker build -t gridwise:local .
+docker run --rm -p 8080:8080 -e GROQ_API_KEY=gsk_your_key_here gridwise:local
 ```
+
+**Verified locally:** built image is 556 MB, container reports `(healthy)` via its built-in `HEALTHCHECK`, `/health` returns `{"status":"ok"}`, and `/optimize-energy` on SAMPLE-01 returns the exact reference cost (`total_cost_bdt: 38365.0`) — matching the live Fly deployment.
 
 In another terminal:
 ```bash
@@ -439,18 +450,20 @@ curl -X POST http://127.0.0.1:8080/optimize-energy -H "Content-Type: application
 - The image contains **no secrets**, so keys are passed only at run time.
 - It listens on `0.0.0.0:8080` (set with `-e PORT=...`), runs as a non-root user, and has a built-in `HEALTHCHECK`.
 
-To build the image yourself:
+To push the image to a registry (Docker Hub, GHCR, etc.):
 ```bash
-docker build -t <dockerhub-user>/gridwise:v1.0.0 .
-docker push <dockerhub-user>/gridwise:v1.0.0
+docker tag gridwise:local <registry>/<user>/gridwise:v1.0.0
+docker push <registry>/<user>/gridwise:v1.0.0
 ```
 
-To deploy on Fly.io:
+**How this project was actually deployed to Fly.io:**
 ```bash
-fly apps create <app-name>            # then set `app` in fly.toml
-fly secrets set GROQ_API_KEY=gsk_... OPENROUTER_API_KEY=sk-or-...
-fly deploy                            # min 1 machine, auto-stop off (always warm)
+fly apps create gridwise-bup
+fly secrets set GROQ_API_KEY=gsk_... OPENROUTER_API_KEY=sk-or-... --app gridwise-bup
+fly deploy --app gridwise-bup         # builds the Dockerfile remotely, min 1 machine, auto-stop off (always warm)
 ```
+
+Live at <https://gridwise-bup.fly.dev> · dashboard at <https://fly.io/apps/gridwise-bup>.
 
 ---
 
@@ -467,8 +480,8 @@ app/
   optimizer.py       two-stage HiGHS linear program and plan building
   replay.py          independent final validator; recomputes totals
   summary.py         explanation and plan_summary text (templates)
-tests/               89 unit, API, fuzz and sample tests
-eval/                42-paraphrase robustness test (real LLM)
+tests/               305 unit, API, fuzz and sample tests
+eval/                42-paraphrase + 180-note adversarial robustness suites (real LLM)
 samples/official/    public sample pack + one request file per sample
 scripts/run_samples.py   checks a running service against the sample pack
 docs/adr/            architectural decision records

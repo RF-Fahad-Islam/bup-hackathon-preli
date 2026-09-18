@@ -20,7 +20,7 @@ class HourSlot(BaseModel):
     hour: StrictInt
     demand_kwh: Number
     solar_kwh: Number
-    tariff_bdt_per_kwh: Number
+    tariff_bdt_per_kwh: Number = Field(ge=0)
 
 
 class BatterySpec(BaseModel):
@@ -38,6 +38,13 @@ class OptimizeRequest(BaseModel):
     operator_notes: list[str] = Field(min_length=1, max_length=3)
     hours: list[HourSlot] = Field(min_length=24, max_length=24)
     battery: BatterySpec
+
+    @field_validator("scenario_id")
+    @classmethod
+    def scenario_id_non_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("scenario_id must not be blank")
+        return v
 
     @field_validator("operator_notes")
     @classmethod

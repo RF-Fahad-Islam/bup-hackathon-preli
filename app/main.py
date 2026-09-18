@@ -59,8 +59,8 @@ def physical_problems(req: OptimizeRequest) -> list[str]:
         numbers += [h.demand_kwh, h.solar_kwh, h.tariff_bdt_per_kwh]
     if not all(math.isfinite(x) for x in numbers):
         return ["all numbers must be finite"]
-    if b.capacity_kwh <= 0:
-        p.append("capacity_kwh must be positive")
+    if b.capacity_kwh < 0:
+        p.append("capacity_kwh must be non-negative")
     if b.minimum_energy_kwh < 0 or b.minimum_energy_kwh > b.capacity_kwh:
         p.append("minimum_energy_kwh must be within [0, capacity_kwh]")
     if not b.minimum_energy_kwh <= b.initial_energy_kwh <= b.capacity_kwh:
