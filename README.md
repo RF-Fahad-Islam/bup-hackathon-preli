@@ -494,6 +494,7 @@ Dockerfile · fly.toml · requirements.txt · requirements-dev.txt · .env.examp
 | **Independent replay before responding** | Mirrors the judge, and totals come from the plan, not from the solver | Trusting the solver output |
 | **Template-based summary text** | Deterministic, instant, and can't contradict the numbers | LLM-written summary |
 | **In-memory LRU cache of confirmed readings** | Repeated notes skip the LLM entirely; only confirmed readings are stored | No cache; external cache (unnecessary at this scale) |
+| **Response schema type-checks `structured_adjustment` per `directive_type`** | Defense-in-depth on the API's own output: catches a future bug in `directives.py` before it ships, not just malformed LLM output | Trusting internal code to always build the right shape |
 
 The main decision is recorded in [docs/adr/0001](docs/adr/0001-llm-reads-code-computes-with-tripwire-escalation.md), and domain terms are defined in [CONTEXT.md](CONTEXT.md).
 
@@ -510,6 +511,7 @@ The main decision is recorded in [docs/adr/0001](docs/adr/0001-llm-reads-code-co
   - It can only choose one of six directive types, with bounded values (hours 0–23, factor 0–1, reserve between 0 and capacity, finite non-negative caps).
   - It can't change demand, solar forecasts, tariffs or battery limits.
   - A note that tries to inject instructions ("ignore previous rules…") can at worst produce one of the six bounded directives; it can never change the data or break a physical rule.
+- **Response is guardrailed too:** `structured_adjustment` is schema-checked against its `directive_type` (e.g. `solar_reduction` must be exactly `{hours, factor}`, nothing more, nothing less), and `no_op` is enforced to have `applies=false` and a null adjustment. This runs on the outgoing response, so a future bug in `directives.py` fails loudly (a 500 in testing) instead of silently shipping a malformed contract.
 - **Input validation:** strict types, exactly 24 unique hours, 1–3 non-blank notes, and physical sanity checks.
 - **Error responses:** safe JSON with no stack traces, file paths or configuration. The interactive `/docs` page is disabled.
 - **Container:** a slim base image, running as a non-root user, with pinned dependency versions.
