@@ -1,5 +1,3 @@
-# GridWise
-
 **An LLM-guided 24-hour campus energy planner.** It reads plain-English operator notes, turns them into strict, validated rules, and returns the cheapest grid, solar and battery schedule that obeys all of them.
 
 BUP CSE Fest 2026 · GridWise preliminary.
