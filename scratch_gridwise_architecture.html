@@ -1,0 +1,531 @@
+<title>GridWise Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f4ef;
+    --surface:#ffffff;
+    --surface-2:#efece3;
+    --ink:#1c2321;
+    --ink-dim:#5b6460;
+    --ink-faint:#8b938e;
+    --line:#dcd6c8;
+    --accent:#c96a2e;      /* grid / cost — copper */
+    --accent-ink:#ffffff;
+    --accent2:#2f6f62;     /* solar+battery — teal */
+    --accent2-soft:#e4efec;
+    --accent-soft:#f5e3d3;
+    --warn:#b5451c;
+    --ok:#2f7a52;
+    --shadow: 0 1px 2px rgba(28,35,33,0.06), 0 8px 24px -12px rgba(28,35,33,0.18);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12181a;
+      --surface:#1a2225;
+      --surface-2:#212a2d;
+      --ink:#eae7de;
+      --ink-dim:#a2aba6;
+      --ink-faint:#748079;
+      --line:#2c363a;
+      --accent:#e0864b;
+      --accent-ink:#1a1204;
+      --accent2:#5aab98;
+      --accent2-soft:#1c2b28;
+      --accent-soft:#332218;
+      --warn:#e07856;
+      --ok:#6cc499;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 28px -12px rgba(0,0,0,0.5);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12181a;
+    --surface:#1a2225;
+    --surface-2:#212a2d;
+    --ink:#eae7de;
+    --ink-dim:#a2aba6;
+    --ink-faint:#748079;
+    --line:#2c363a;
+    --accent:#e0864b;
+    --accent-ink:#1a1204;
+    --accent2:#5aab98;
+    --accent2-soft:#1c2b28;
+    --accent-soft:#332218;
+    --warn:#e07856;
+    --ok:#6cc499;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 28px -12px rgba(0,0,0,0.5);
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    padding-inline:20px;
+    padding-block: 48px 80px;
+    line-height:1.5;
+  }
+  .wrap{max-width:1040px; margin:0 auto;}
+
+  h1,h2,h3{font-family:"Fraunces", Georgia, serif; font-weight:600; text-wrap:balance; margin:0;}
+  .mono{font-family:"IBM Plex Mono", ui-monospace, "SF Mono", monospace;}
+
+  /* ---- Header ---- */
+  header{margin-bottom:56px;}
+  .eyebrow{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:12px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--accent2); font-weight:600; margin-bottom:10px;
+  }
+  h1{font-size:clamp(30px,5vw,44px); line-height:1.08; margin-bottom:14px;}
+  header p.lede{
+    max-width:62ch; color:var(--ink-dim); font-size:16.5px; margin-bottom:22px;
+  }
+  .badge-row{display:flex; flex-wrap:wrap; gap:8px;}
+  .badge{
+    font-family:"IBM Plex Mono", monospace; font-size:11.5px;
+    border:1px solid var(--line); border-radius:100px;
+    padding:5px 12px; color:var(--ink-dim); background:var(--surface);
+  }
+
+  section{margin-bottom:58px;}
+  .section-head{margin-bottom:20px; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;}
+  .section-head .num{
+    font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--accent);
+    border:1px solid var(--accent); border-radius:5px; padding:2px 7px; font-weight:600;
+  }
+  .section-head h2{font-size:22px;}
+  .section-sub{color:var(--ink-dim); font-size:14.5px; max-width:68ch; margin-top:6px;}
+
+  figure{margin:0; background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:20px 18px 16px; box-shadow:var(--shadow);}
+  figure svg{width:100%; height:auto; display:block; overflow: visible;}
+  figcaption{
+    margin-top:14px; padding-top:12px; border-top:1px dashed var(--line);
+    font-size:13px; color:var(--ink-dim);
+  }
+
+  svg text{fill:currentColor; font-family:"IBM Plex Sans", sans-serif;}
+  svg .mono-text{font-family:"IBM Plex Mono", monospace;}
+
+  /* ---- generic two column ---- */
+  .grid-2{display:grid; grid-template-columns:1.15fr .85fr; gap:20px;}
+  @media (max-width:760px){ .grid-2{grid-template-columns:1fr;} .grid-2{gap:16px;} }
+
+  /* ---- tables ---- */
+  .tbl-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--surface); box-shadow:var(--shadow);}
+  table{border-collapse:collapse; width:100%; font-size:13.5px; min-width:560px;}
+  th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:top;}
+  th{font-family:"IBM Plex Mono", monospace; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-dim); background:var(--surface-2); font-weight:600;}
+  tr:last-child td{border-bottom:none;}
+  td.mono-cell, code{font-family:"IBM Plex Mono", monospace; font-size:12.5px; background:var(--surface-2); border-radius:5px; padding:1px 5px;}
+
+  .pill{display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:11px; padding:2px 8px; border-radius:100px; font-weight:600;}
+  .pill.ok{background:var(--accent2-soft); color:var(--accent2);}
+  .pill.warn{background:var(--accent-soft); color:var(--warn);}
+
+  /* ---- stack strip ---- */
+  .stack-strip{display:flex; flex-wrap:wrap; gap:10px;}
+  .stack-item{
+    flex:1 1 150px; background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; box-shadow:var(--shadow);
+  }
+  .stack-item .role{font-family:"IBM Plex Mono",monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin-bottom:4px;}
+  .stack-item .val{font-size:14px; font-weight:600;}
+
+  footer{margin-top:70px; padding-top:20px; border-top:1px solid var(--line); color:var(--ink-faint); font-size:12.5px;}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">System architecture — GridWise</div>
+  <h1>Plain-English notes in. A proven-optimal 24&#8209;hour energy plan out.</h1>
+  <p class="lede">GridWise turns 1&ndash;3 free-text operator notes plus a day of demand/solar/tariff data into a cost-minimal grid+solar+battery schedule. Four stages do the work &mdash; a language model that <em>reads</em>, plain code that <em>checks</em>, a linear-program solver that <em>plans</em>, and plain code that <em>audits</em> &mdash; and none of them is trusted blindly by the next.</p>
+  <div class="badge-row">
+    <span class="badge">FastAPI + Pydantic v2</span>
+    <span class="badge">Groq &rarr; OpenRouter chain</span>
+    <span class="badge">SciPy / HiGHS linear program</span>
+    <span class="badge">~1s median end-to-end</span>
+    <span class="badge">10/10 official samples, exact cost</span>
+  </div>
+</header>
+
+<!-- ================= 1. MACRO PIPELINE ================= -->
+<section>
+  <div class="section-head"><span class="num">01</span><h2>The request pipeline</h2></div>
+  <p class="section-sub">One POST to <code>/optimize-energy</code> passes through seven stages in order. Every stage's output is the next stage's untrusted input &mdash; nothing downstream assumes an upstream step got it right.</p>
+
+  <figure>
+    <svg viewBox="0 0 1000 300" role="img" aria-label="Pipeline: request validation, LLM interpretation, guardrail, per-hour merge, two-stage optimizer, plan build, and independent replay, before the response is returned.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <!-- baseline row of arrows -->
+      <line x1="40" y1="150" x2="960" y2="150" stroke="currentColor" stroke-opacity="0" />
+
+      <!-- Step definitions: x centers -->
+      <!-- 0 Request 60 / 1 Validate 190 / 2 Reader 330 / 3 Guardrail 470 / 4 Merge 600 / 5 Optimizer 730 / 6 Replay 870 / 7 Response 970 -->
+
+      <!-- connecting arrows -->
+      <g stroke="currentColor" stroke-width="1.6">
+        <line x1="112" y1="150" x2="150" y2="150" marker-end="url(#arrow)"/>
+        <line x1="250" y1="150" x2="286" y2="150" marker-end="url(#arrow)"/>
+        <line x1="392" y1="150" x2="428" y2="150" marker-end="url(#arrow)"/>
+        <line x1="534" y1="150" x2="562" y2="150" marker-end="url(#arrow)"/>
+        <line x1="654" y1="150" x2="690" y2="150" marker-end="url(#arrow)"/>
+        <line x1="792" y1="150" x2="828" y2="150" marker-end="url(#arrow)"/>
+        <line x1="912" y1="150" x2="944" y2="150" marker-end="url(#arrow)"/>
+      </g>
+
+      <!-- Request pill -->
+      <g transform="translate(40,124)">
+        <rect width="72" height="52" rx="10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <text x="36" y="22" text-anchor="middle" font-size="11" font-weight="600">Request</text>
+        <text x="36" y="36" text-anchor="middle" font-size="9" class="mono-text" fill="currentColor" opacity=".65">notes + 24h</text>
+      </g>
+
+      <!-- 1 Validate -->
+      <g transform="translate(150,110)">
+        <rect width="100" height="80" rx="12" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="50" y="30" text-anchor="middle" font-size="11" font-weight="700">Validate</text>
+        <text x="50" y="46" text-anchor="middle" font-size="9" opacity=".7">Pydantic</text>
+        <text x="50" y="66" text-anchor="middle" font-size="9" class="mono-text" fill="var(--warn)">400 / 422</text>
+      </g>
+
+      <!-- 2 Reader (LLM) -->
+      <g transform="translate(286,104)">
+        <rect width="106" height="92" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="53" y="24" text-anchor="middle" font-size="10" class="mono-text" fill="var(--accent)" font-weight="700">1 · READER</text>
+        <text x="53" y="42" text-anchor="middle" font-size="11" font-weight="700">Interpret</text>
+        <text x="53" y="58" text-anchor="middle" font-size="9" opacity=".75">cheap &rarr; tripwire</text>
+        <text x="53" y="72" text-anchor="middle" font-size="9" opacity=".75">&rarr; strong (final)</text>
+      </g>
+
+      <!-- 3 Guardrail -->
+      <g transform="translate(428,104)">
+        <rect width="106" height="92" rx="12" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="53" y="24" text-anchor="middle" font-size="10" class="mono-text" opacity=".7" font-weight="700">2 · CHECKER</text>
+        <text x="53" y="42" text-anchor="middle" font-size="11" font-weight="700">Guardrail</text>
+        <text x="53" y="58" text-anchor="middle" font-size="9" opacity=".75">raw reading &rarr;</text>
+        <text x="53" y="72" text-anchor="middle" font-size="9" opacity=".75">Directive</text>
+      </g>
+
+      <!-- 4 Merge -->
+      <g transform="translate(562,110)">
+        <rect width="92" height="80" rx="12" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="46" y="30" text-anchor="middle" font-size="11" font-weight="700">Merge</text>
+        <text x="46" y="46" text-anchor="middle" font-size="9" opacity=".75">per hour,</text>
+        <text x="46" y="60" text-anchor="middle" font-size="9" opacity=".75">strictest wins</text>
+      </g>
+
+      <!-- 5 Optimizer -->
+      <g transform="translate(690,100)">
+        <rect width="102" height="100" rx="12" fill="var(--accent2-soft)" stroke="var(--accent2)" stroke-width="1.6"/>
+        <text x="51" y="22" text-anchor="middle" font-size="10" class="mono-text" fill="var(--accent2)" font-weight="700">3 · PLANNER</text>
+        <text x="51" y="40" text-anchor="middle" font-size="11" font-weight="700">Optimizer</text>
+        <text x="51" y="56" text-anchor="middle" font-size="9" opacity=".75">2-stage LP</text>
+        <text x="51" y="70" text-anchor="middle" font-size="9" opacity=".75">120 variables</text>
+        <text x="51" y="84" text-anchor="middle" font-size="8.5" class="mono-text" fill="var(--warn)">infeasible&rarr;422</text>
+      </g>
+
+      <!-- 6 Replay -->
+      <g transform="translate(828,104)">
+        <rect width="84" height="92" rx="12" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="42" y="22" text-anchor="middle" font-size="10" class="mono-text" opacity=".7" font-weight="700">4 · AUDITOR</text>
+        <text x="42" y="40" text-anchor="middle" font-size="11" font-weight="700">Replay</text>
+        <text x="42" y="56" text-anchor="middle" font-size="9" opacity=".75">independent</text>
+        <text x="42" y="70" text-anchor="middle" font-size="9" opacity=".75">re-check</text>
+      </g>
+
+      <!-- Response pill -->
+      <g transform="translate(944,124)">
+        <rect width="56" height="52" rx="10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <text x="28" y="24" text-anchor="middle" font-size="10" font-weight="600">200</text>
+        <text x="28" y="38" text-anchor="middle" font-size="8.5" class="mono-text" opacity=".65">plan</text>
+      </g>
+
+      <!-- bottom annotation row: the four roles -->
+      <line x1="40" y1="230" x2="1000" y2="230" stroke="currentColor" stroke-opacity=".15"/>
+      <text x="40" y="252" font-size="10.5" opacity=".65">Each numbered stage is one team member with exactly one job &mdash; the next stage never trusts the previous one's output outright.</text>
+      <text x="40" y="272" font-size="10" class="mono-text" opacity=".55">app/main.py orchestrates · app/interpreter.py + llm.py · app/directives.py · app/optimizer.py · app/replay.py</text>
+    </svg>
+    <figcaption>The seven-stage request pipeline. Steps 1&ndash;4 correspond to the Reader, Checker, Planner and Auditor roles described below; validation, merging and plan-building are the plain-code connective tissue between them.</figcaption>
+  </figure>
+</section>
+
+<!-- ================= 2. READER ZOOM ================= -->
+<section>
+  <div class="section-head"><span class="num">02</span><h2>Inside the Reader: cheap model, tripwire, escalation</h2></div>
+  <p class="section-sub">All notes in a request are read in <strong>one batched call</strong>. A pattern-based Tripwire never answers on its own &mdash; it only checks the LLM and forces a second opinion when they disagree.</p>
+
+  <figure>
+    <svg viewBox="0 0 980 420" role="img" aria-label="Reader flow: check cache, else call the cheap LLM, compare against the tripwire; on agreement accept and cache, on disagreement or invalid output escalate to the strong LLM whose answer is final; if the strong model fails, fall back to the cheap reading, and if there is no reading at all, degraded mode uses the tripwire only if it read every note confidently, otherwise the request returns a 502.">
+      <defs>
+        <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <!-- Notes in -->
+      <g transform="translate(20,170)">
+        <rect width="92" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <text x="46" y="26" text-anchor="middle" font-size="10.5" font-weight="600">Operator</text>
+        <text x="46" y="40" text-anchor="middle" font-size="10.5" font-weight="600">notes (1&ndash;3)</text>
+      </g>
+      <line x1="112" y1="198" x2="155" y2="198" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+      <!-- Cache diamond -->
+      <g transform="translate(155,158)">
+        <polygon points="45,0 90,40 45,80 0,40" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="45" y="36" text-anchor="middle" font-size="10" font-weight="700">In cache?</text>
+        <text x="45" y="50" text-anchor="middle" font-size="8.5" opacity=".65">per note</text>
+      </g>
+
+      <!-- cache yes -> up to "use cached" -->
+      <line x1="200" y1="158" x2="200" y2="90" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <text x="208" y="120" font-size="9.5" fill="var(--ok)" font-weight="700">yes</text>
+      <g transform="translate(150,40)">
+        <rect width="100" height="46" rx="10" fill="var(--accent2-soft)" stroke="var(--accent2)" stroke-width="1.4"/>
+        <text x="50" y="20" text-anchor="middle" font-size="10" font-weight="700">Use cached</text>
+        <text x="50" y="34" text-anchor="middle" font-size="9" opacity=".75">reading</text>
+      </g>
+      <line x1="250" y1="63" x2="780" y2="63" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 3" marker-end="url(#arrow2)"/>
+
+      <!-- cache no -> cheap LLM -->
+      <line x1="245" y1="198" x2="288" y2="198" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <text x="252" y="190" font-size="9.5" opacity=".65" font-weight="700">no</text>
+      <g transform="translate(288,160)">
+        <rect width="118" height="76" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="59" y="24" text-anchor="middle" font-size="10.5" font-weight="700">Cheap LLM</text>
+        <text x="59" y="40" text-anchor="middle" font-size="9" class="mono-text" opacity=".75">gpt-oss-20b</text>
+        <text x="59" y="56" text-anchor="middle" font-size="9" class="mono-text" opacity=".75">temp 0 · 6s</text>
+      </g>
+
+      <line x1="406" y1="198" x2="448" y2="198" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+      <!-- Tripwire diamond -->
+      <g transform="translate(448,155)">
+        <polygon points="48,0 96,43 48,86 0,43" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="48" y="36" text-anchor="middle" font-size="9.5" font-weight="700">Tripwire</text>
+        <text x="48" y="50" text-anchor="middle" font-size="9.5" font-weight="700">agrees?</text>
+      </g>
+
+      <!-- tripwire yes -> accept+cache (up) -->
+      <line x1="496" y1="155" x2="496" y2="90" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <text x="504" y="120" font-size="9.5" fill="var(--ok)" font-weight="700">yes</text>
+      <g transform="translate(446,40)">
+        <rect width="110" height="46" rx="10" fill="var(--accent2-soft)" stroke="var(--accent2)" stroke-width="1.4"/>
+        <text x="55" y="20" text-anchor="middle" font-size="10" font-weight="700">Accept + cache</text>
+        <text x="55" y="34" text-anchor="middle" font-size="9" opacity=".75">confirmed reading</text>
+      </g>
+      <line x1="556" y1="63" x2="780" y2="63" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 3" marker-end="url(#arrow2)"/>
+
+      <!-- tripwire no/unsure/invalid -> strong LLM -->
+      <line x1="544" y1="198" x2="600" y2="198" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <text x="548" y="190" font-size="9" opacity=".65" font-weight="700">no / unsure / invalid</text>
+      <g transform="translate(600,155)">
+        <rect width="130" height="86" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.8"/>
+        <text x="65" y="22" text-anchor="middle" font-size="10.5" font-weight="700">Strong LLM</text>
+        <text x="65" y="38" text-anchor="middle" font-size="9" class="mono-text" opacity=".75">gpt-oss-120b</text>
+        <text x="65" y="54" text-anchor="middle" font-size="9" font-weight="700" fill="var(--accent)">answer is final</text>
+        <text x="65" y="70" text-anchor="middle" font-size="9" class="mono-text" opacity=".75">10s timeout</text>
+      </g>
+      <line x1="730" y1="198" x2="780" y2="198" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <line x1="780" y1="198" x2="780" y2="86" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 3" marker-end="url(#arrow2)"/>
+
+      <!-- Response merge point -->
+      <g transform="translate(780,40)">
+        <rect width="120" height="46" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.6"/>
+        <text x="60" y="20" text-anchor="middle" font-size="10" font-weight="700">Directive</text>
+        <text x="60" y="34" text-anchor="middle" font-size="9" opacity=".75">to Guardrail (§3)</text>
+      </g>
+
+      <!-- strong fails path -->
+      <line x1="665" y1="241" x2="665" y2="290" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <text x="672" y="270" font-size="9" opacity=".65" font-weight="700">fails</text>
+      <g transform="translate(560,290)">
+        <rect width="150" height="52" rx="10" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="75" y="22" text-anchor="middle" font-size="9.5" font-weight="700">Use cheap reading</text>
+        <text x="75" y="38" text-anchor="middle" font-size="8.5" opacity=".7">if it passed guardrail &mdash; not cached</text>
+      </g>
+
+      <!-- none available -> degraded diamond -->
+      <line x1="560" y1="316" x2="480" y2="316" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <text x="490" y="308" font-size="9" opacity=".65" font-weight="700">no reading at all</text>
+      <g transform="translate(370,285)">
+        <polygon points="55,0 110,50 55,100 0,50" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="55" y="42" text-anchor="middle" font-size="9" font-weight="700">Tripwire read</text>
+        <text x="55" y="55" text-anchor="middle" font-size="9" font-weight="700">every note</text>
+        <text x="55" y="68" text-anchor="middle" font-size="9" font-weight="700">confidently?</text>
+      </g>
+
+      <line x1="370" y1="325" x2="300" y2="325" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <text x="308" y="317" font-size="9.5" fill="var(--ok)" font-weight="700">yes</text>
+      <g transform="translate(150,300)">
+        <rect width="150" height="48" rx="10" fill="var(--accent2-soft)" stroke="var(--accent2)" stroke-width="1.4"/>
+        <text x="75" y="20" text-anchor="middle" font-size="10" font-weight="700">Degraded mode</text>
+        <text x="75" y="35" text-anchor="middle" font-size="8.5" opacity=".75">tripwire reading used directly</text>
+      </g>
+
+      <line x1="425" y1="385" x2="425" y2="405" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow2)"/>
+      <text x="433" y="400" font-size="9.5" fill="var(--warn)" font-weight="700">no</text>
+      <g transform="translate(370,405)">
+        <rect width="110" height="0" />
+      </g>
+      <g transform="translate(360,3)">
+      </g>
+      <g transform="translate(365,395)">
+        <rect x="0" y="0" width="120" height="20" rx="10" fill="none" stroke="var(--warn)" stroke-width="1.4"/>
+        <text x="60" y="14" text-anchor="middle" font-size="10" font-weight="700" fill="var(--warn)">502 error</text>
+      </g>
+    </svg>
+    <figcaption>Every note is escalated independently, but all notes in one request share a single batched call per tier. The Tripwire (pattern matching) can trigger escalation but can never itself supply the final answer outside Degraded Mode &mdash; the LLM stays the interpreter.</figcaption>
+  </figure>
+</section>
+
+<!-- ================= 3. GUARDRAIL + MERGE ================= -->
+<section>
+  <div class="section-head"><span class="num">03</span><h2>Guardrail: why the LLM never does arithmetic</h2></div>
+  <p class="section-sub">The model reports only what a note <em>literally says</em> &mdash; a <strong>Raw Reading</strong>. Code, not the model, expands hours and computes factors, which structurally eliminates the two classic failure modes.</p>
+
+  <div class="grid-2">
+    <figure>
+      <svg viewBox="0 0 460 220" role="img" aria-label="Raw reading example: the note about washing solar panels from noon to two PM at twenty five percent produces start hour twelve, end hour fourteen, solar value twenty five, meaning remaining; code then expands this to hours twelve and thirteen with factor zero point two five.">
+        <text x="10" y="24" font-size="11" font-weight="700">"...noon until 2 PM... roughly 25% of forecast"</text>
+
+        <rect x="10" y="40" width="200" height="78" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
+        <text x="20" y="60" font-size="9.5" font-weight="700" fill="var(--accent)">RAW READING (LLM)</text>
+        <text x="20" y="78" font-size="10" class="mono-text">start_hour: 12, end_hour: 14</text>
+        <text x="20" y="94" font-size="10" class="mono-text">solar_value: 25</text>
+        <text x="20" y="110" font-size="10" class="mono-text">solar_meaning: remaining</text>
+
+        <line x1="215" y1="79" x2="255" y2="79" stroke="currentColor" stroke-width="1.6" marker-end="url(#arrow)"/>
+        <text x="235" y="70" text-anchor="middle" font-size="9" opacity=".65">code</text>
+
+        <rect x="255" y="40" width="195" height="78" rx="10" fill="var(--accent2-soft)" stroke="var(--accent2)" stroke-width="1.4"/>
+        <text x="265" y="60" font-size="9.5" font-weight="700" fill="var(--accent2)">DIRECTIVE (validated)</text>
+        <text x="265" y="78" font-size="10" class="mono-text">type: solar_reduction</text>
+        <text x="265" y="94" font-size="10" class="mono-text">hours: [12, 13]</text>
+        <text x="265" y="110" font-size="10" class="mono-text">factor: 0.25</text>
+
+        <text x="10" y="150" font-size="10" opacity=".7">End hour excluded &rarr; window is [12, 13], not [12, 13, 14].</text>
+        <text x="10" y="168" font-size="10" opacity=".7">"25% remaining" stored directly &mdash; never inverted to 0.75 or misread as 0.25 lost.</text>
+        <text x="10" y="192" font-size="9.5" fill="var(--warn)" font-weight="600">These two arithmetic slips are what a schema validator can't catch &mdash; because the wrong number is still schema-valid.</text>
+      </svg>
+      <figcaption>The Guardrail (app/directives.py) is deterministic code: it rejects any type, hour, or value outside the six allowed directives and does every calculation itself.</figcaption>
+    </figure>
+
+    <div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Directive</th><th>applies</th></tr></thead>
+          <tbody>
+            <tr><td class="mono-cell">solar_reduction</td><td><span class="pill ok">true</span></td></tr>
+            <tr><td class="mono-cell">minimum_battery_reserve</td><td><span class="pill ok">true</span></td></tr>
+            <tr><td class="mono-cell">no_charge_window</td><td><span class="pill ok">true</span></td></tr>
+            <tr><td class="mono-cell">no_discharge_window</td><td><span class="pill ok">true</span></td></tr>
+            <tr><td class="mono-cell">max_grid_window</td><td><span class="pill ok">true</span></td></tr>
+            <tr><td class="mono-cell">no_op</td><td><span class="pill warn">false</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px; color:var(--ink-dim); margin-top:12px;">Every note maps to exactly one of these six. When two notes overlap on the same hour, the <strong>most restrictive value wins</strong>: lowest solar factor, highest reserve, lowest grid cap, and no-charge/no-discharge hours simply union.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4. OPTIMIZER ================= -->
+<section>
+  <div class="section-head"><span class="num">04</span><h2>Planner: a two-stage linear program</h2></div>
+  <p class="section-sub">120 variables &mdash; grid, solar used, charge, discharge and battery level for each of 24 hours &mdash; solved twice by HiGHS.</p>
+
+  <figure>
+    <svg viewBox="0 0 940 190" role="img" aria-label="Stage one of the linear program minimizes total grid cost and returns the proven optimum; stage two fixes that cost and minimizes battery charge plus discharge throughput, so the final plan never charges and discharges in the same hour.">
+      <g transform="translate(20,20)">
+        <rect width="270" height="140" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="16" y="28" font-size="10" class="mono-text" font-weight="700" fill="var(--accent)">STAGE 1</text>
+        <text x="16" y="50" font-size="12.5" font-weight="700">minimize &Sigma; grid[h] &times; tariff[h]</text>
+        <text x="16" y="72" font-size="10" opacity=".75">subject to: energy balance, battery</text>
+        <text x="16" y="88" font-size="10" opacity=".75">level dynamics, rate limits, every</text>
+        <text x="16" y="104" font-size="10" opacity=".75">directive, battery neutrality</text>
+        <text x="16" y="126" font-size="11" font-weight="700" fill="var(--accent)">&rarr; proven minimum cost C*</text>
+      </g>
+
+      <line x1="300" y1="90" x2="345" y2="90" stroke="currentColor" stroke-width="1.8" marker-end="url(#arrow)"/>
+      <text x="322" y="78" text-anchor="middle" font-size="9" opacity=".65">fix cost = C*</text>
+
+      <g transform="translate(345,20)">
+        <rect width="270" height="140" rx="12" fill="var(--accent2-soft)" stroke="var(--accent2)" stroke-width="1.6"/>
+        <text x="16" y="28" font-size="10" class="mono-text" font-weight="700" fill="var(--accent2)">STAGE 2</text>
+        <text x="16" y="50" font-size="12.5" font-weight="700">minimize &Sigma; charge[h] + discharge[h]</text>
+        <text x="16" y="72" font-size="10" opacity=".75">same constraints, plus</text>
+        <text x="16" y="88" font-size="10" opacity=".75">total cost held exactly at C*</text>
+        <text x="16" y="110" font-size="11" font-weight="700" fill="var(--accent2)">&rarr; the cleanest tied-optimal plan</text>
+        <text x="16" y="128" font-size="9.5" opacity=".7">never charges + discharges same hour</text>
+      </g>
+
+      <line x1="615" y1="90" x2="660" y2="90" stroke="currentColor" stroke-width="1.8" marker-end="url(#arrow)"/>
+
+      <g transform="translate(660,20)">
+        <rect width="260" height="140" rx="12" fill="var(--surface-2)" stroke="currentColor" stroke-width="1.4"/>
+        <text x="16" y="28" font-size="10" class="mono-text" font-weight="700" opacity=".7">IF INFEASIBLE</text>
+        <text x="16" y="50" font-size="11.5" font-weight="700">Re-ask the strong LLM once</text>
+        <text x="16" y="70" font-size="10" opacity=".75">with the conflicting directives</text>
+        <text x="16" y="86" font-size="10" opacity=".75">named as feedback</text>
+        <text x="16" y="112" font-size="10" opacity=".75">still infeasible &rarr;</text>
+        <text x="16" y="130" font-size="12" font-weight="700" fill="var(--warn)">HTTP 422</text>
+      </g>
+    </svg>
+    <figcaption>Stage 2 exists purely for plan hygiene: many schedules tie stage 1's minimum cost, and fixing the cost while minimizing throughput picks the least "jittery" one.</figcaption>
+  </figure>
+</section>
+
+<!-- ================= 5. RELIABILITY ================= -->
+<section>
+  <div class="section-head"><span class="num">05</span><h2>What happens when something fails</h2></div>
+  <p class="section-sub">Every failure mode has a named, bounded response &mdash; nothing silently guesses.</p>
+  <div class="tbl-wrap">
+    <table style="min-width:640px;">
+      <thead><tr><th>Failure</th><th>Response</th></tr></thead>
+      <tbody>
+        <tr><td>Cheap model misreads a note</td><td>Tripwire disagrees &rarr; escalates to strong model, which is final</td></tr>
+        <tr><td>LLM returns invalid output</td><td>Guardrail rejects it; note escalates; invalid output never reaches the optimizer</td></tr>
+        <tr><td>A model is rate-limited (429)</td><td>Only that model skipped for its <code>Retry-After</code> (max 30s); next in chain tried</td></tr>
+        <tr><td>A provider rejects the key / is down</td><td>Whole provider skipped 5 min; falls through to OpenRouter</td></tr>
+        <tr><td>Strong model unavailable</td><td>Cheap reading used if it passed the guardrail &mdash; not cached</td></tr>
+        <tr><td>Every LLM unavailable</td><td>Degraded Mode if Tripwire read every note confidently, else <span class="pill warn">502</span></td></tr>
+        <tr><td>Notes lead to an impossible plan</td><td>Cached reading dropped; strong LLM re-reads once; still impossible &rarr; <span class="pill warn">422</span></td></tr>
+        <tr><td>Plan fails final replay</td><td>Controlled <span class="pill warn">500</span> &mdash; a wrong plan is never sent</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 6. STACK ================= -->
+<section>
+  <div class="section-head"><span class="num">06</span><h2>Technology stack</h2></div>
+  <div class="stack-strip">
+    <div class="stack-item"><div class="role">API</div><div class="val">FastAPI + Uvicorn</div></div>
+    <div class="stack-item"><div class="role">Validation</div><div class="val">Pydantic v2, strict</div></div>
+    <div class="stack-item"><div class="role">LLM main</div><div class="val">Groq gpt-oss 20b / 120b</div></div>
+    <div class="stack-item"><div class="role">LLM fallback</div><div class="val">OpenRouter chain</div></div>
+    <div class="stack-item"><div class="role">Optimizer</div><div class="val">SciPy · HiGHS LP</div></div>
+    <div class="stack-item"><div class="role">HTTP client</div><div class="val">httpx (async)</div></div>
+    <div class="stack-item"><div class="role">Hosting</div><div class="val">Docker &middot; Fly.io (sin)</div></div>
+    <div class="stack-item"><div class="role">Tests</div><div class="val">pytest · 89 unit + 400 fuzz</div></div>
+  </div>
+</section>
+
+<footer>
+  GridWise &mdash; BUP CSE Fest 2026 preliminary. Diagram reconstructed from <span class="mono">README.md</span> and <span class="mono">CONTEXT.md</span> in this repository.
+</footer>
+
+</div>
