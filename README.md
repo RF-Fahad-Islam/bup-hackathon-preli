@@ -13,7 +13,7 @@ BUP CSE Fest 2026 · GridWise preliminary.
 | Live endpoint | `https://<fly-app>.fly.dev` *(fill in after deploy)* |
 | Docker fallback | `docker.io/<dockerhub-user>/gridwise:v1.0.0` *(fill in after push)* |
 | Port | `8080` (override with `PORT`) |
-| LLM | OpenRouter. Cheap chain `openai/gpt-4.1-mini → google/gemini-2.5-flash`, escalating to `anthropic/claude-sonnet-5 → anthropic/claude-sonnet-4.6` |
+| LLM | Provider chain over OpenAI-compatible APIs. Cheap tier: OpenRouter `gpt-4.1-mini → gemini-2.5-flash`, then Groq `gpt-oss-20b → qwen3.8-27b`. Strong tier: OpenRouter `claude-sonnet-5 → claude-sonnet-4.6`, then Groq `gpt-oss-120b → gpt-oss-20b` |
 | Solver | SciPy `linprog(method="highs")` |
 
 ---
@@ -33,6 +33,7 @@ POST /optimize-energy
    │                         │disagree / unsure / invalid
    │                         ▼
    │                   strong model (final answer)
+   │      strong model down ──► keep the cheap model's guardrail-valid reading (not cached)
    │      all LLMs down ──► degraded mode (tripwire only if it read every note confidently) else 502
    │
    ├─ 3. Guardrail (app/directives.py)   untrusted LLM output → Directive
@@ -46,7 +47,7 @@ POST /optimize-energy
    │
    ├─ 5. Optimizer (app/optimizer.py) — two-stage LP, 120 variables
    │      stage 1: min Σ grid·tariff
-   │      stage 2: cost ≤ optimum + 1e-6, min Σ(charge+discharge)  (cleanest tied-optimal plan)
+   │      stage 2: cost ≤ optimum (+1e-9 rel), min Σ(charge+discharge)  (cleanest tied-optimal plan)
    │      infeasible → re-ask strong LLM once → still infeasible → 422
    │
    ├─ 6. Plan building: charge/discharge netted into one action per hour, rounded to 4 d.p.
@@ -61,7 +62,7 @@ POST /optimize-energy
 The LLM reports only what a note literally says: *"1 PM to 3 PM"* becomes `{start_hour:13, end_hour:15}`, and *"80% reduction"* becomes `{solar_value:80, solar_meaning:"reduction"}`. Deterministic code then expands the end-exclusive window to `[13,14]` and computes `factor = 0.2`. This removes the two most common LLM mistakes, off-by-one windows and "80% vs 0.2", and those mistakes are otherwise structurally valid, so a guardrail can't catch them. See [docs/adr/0001](docs/adr/0001-llm-reads-code-computes-with-tripwire-escalation.md).
 
 ### Role of the tripwire
-`app/tripwire.py` is a pattern-based reader that only **checks** the cheap model's answer. If it disagrees, or can't read a note confidently, the notes escalate to the strong model, whose guardrail-valid answer is final. The tripwire never overrides an LLM. Its reading is used only in **degraded mode**, when every LLM call has failed, and only if it read every note confidently. Otherwise the service returns a controlled `502`. On the labelled paraphrase set it gets 30/42 right and abstains on the other 12, with **0 confident wrong answers**.
+`app/tripwire.py` is a pattern-based reader that only **checks** the cheap model's answer. If it disagrees, or can't read a note confidently, the notes escalate to the strong model, whose guardrail-valid answer is final. The tripwire never overrides an LLM. If the strong model is unavailable, the cheap model's guardrail-valid reading is used, because it is still an LLM reading. That reading is not cached, so a later request can escalate again. The tripwire's own reading is used only in **degraded mode**, when every LLM call has failed, and only if it read every note confidently. Otherwise the service returns a controlled `502`. On the labelled paraphrase set it gets 30/42 right and abstains on the other 12, with **0 confident wrong answers**.
 
 ### Semantics implemented
 - Windows include the start hour and exclude the end hour. `"10 PM to 2 AM"` wraps to `[0,1,22,23]`, `"from 8 PM onwards"` gives `[20..23]`, `"until 6 AM"` gives `[0..5]`, and one note may name several periods.
@@ -81,7 +82,8 @@ git clone <repo-url> gridwise && cd gridwise
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-export OPENROUTER_API_KEY=sk-or-...        # Windows PowerShell: $env:OPENROUTER_API_KEY="sk-or-..."
+export OPENROUTER_API_KEY=sk-or-...        # and/or GROQ_API_KEY=gsk_...
+                                           # Windows PowerShell: $env:OPENROUTER_API_KEY="sk-or-..."
 uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
@@ -98,9 +100,12 @@ curl -X POST http://localhost:8080/optimize-energy \
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `OPENROUTER_API_KEY` | **yes** | – | OpenRouter API key (never commit it) |
-| `LLM_CHEAP_MODELS` | no | `openai/gpt-4.1-mini,google/gemini-2.5-flash` | First-pass models, sent as an OpenRouter `models` fallback list |
-| `LLM_STRONG_MODELS` | no | `anthropic/claude-sonnet-5,anthropic/claude-sonnet-4.6` | Escalation models |
+| `OPENROUTER_API_KEY` | at least one key | – | OpenRouter key |
+| `GROQ_API_KEY` | at least one key | – | Groq key (fallback provider) |
+| `OPENAI_API_KEY` | no | – | Optional OpenAI provider, if listed in a chain |
+| `LLM_CHEAP_CHAIN` | no | `openrouter:openai/gpt-4.1-mini\|google/gemini-2.5-flash,groq:openai/gpt-oss-20b\|qwen/qwen3.8-27b` | First-pass tier. Format: `provider:model\|model,provider:model`, tried in order |
+| `LLM_STRONG_CHAIN` | no | `openrouter:anthropic/claude-sonnet-5\|anthropic/claude-sonnet-4.6,groq:openai/gpt-oss-120b\|openai/gpt-oss-20b` | Escalation tier |
+| `LLM_PROVIDER_COOLDOWN_S` | no | `300` | How long a provider answering 401/402/403 is skipped. A 429 skips only that model, for its `Retry-After` (≤ 30 s) |
 | `LLM_CHEAP_TIMEOUT_S` | no | `6` | Cheap-call timeout |
 | `LLM_STRONG_TIMEOUT_S` | no | `10` | Strong-call timeout |
 | `INTERPRET_DEADLINE_S` | no | `20` | Hard deadline for the whole interpretation step (the judge timeout is 30 s) |
@@ -111,11 +116,13 @@ curl -X POST http://localhost:8080/optimize-energy \
 
 The cache stores only guardrail-valid LLM readings, never degraded ones. The first request for any note always goes to the LLM.
 
+**Switching providers is a configuration change, not a code change.** Every supported provider speaks the OpenAI-compatible chat API with strict JSON-schema output, so `app/llm.py` is a small, dependency-free client. Providers are skipped when their key is missing. OpenRouter gets its own model list in one request (`models` routing), and other providers are tried model by model. We chose this over LangChain to keep the image small and startup fast, and to keep exact control over structured output and fallbacks.
+
 ## Docker fallback
 
 ```bash
 docker pull docker.io/<dockerhub-user>/gridwise:v1.0.0
-docker run --rm -p 8080:8080 -e OPENROUTER_API_KEY=sk-or-... docker.io/<dockerhub-user>/gridwise:v1.0.0
+docker run --rm -p 8080:8080 -e OPENROUTER_API_KEY=sk-or-... -e GROQ_API_KEY=gsk_... docker.io/<dockerhub-user>/gridwise:v1.0.0
 curl http://localhost:8080/health
 ```
 
@@ -132,7 +139,7 @@ docker push <dockerhub-user>/gridwise:v1.0.0
 
 ```bash
 fly apps create <app-name>            # then set `app` in fly.toml
-fly secrets set OPENROUTER_API_KEY=sk-or-...
+fly secrets set OPENROUTER_API_KEY=sk-or-... GROQ_API_KEY=gsk_...
 fly deploy                            # builds remotely; min 1 machine, auto-stop off (always warm)
 ```
 
@@ -147,27 +154,32 @@ pytest -q                              # unit + API + fuzz tests (no network; th
 - `tests/test_optimizer.py`: every directive is enforced, and the **LP cost equals an independent exhaustive dynamic-programming optimum**.
 - `tests/test_fuzz.py`: 400 random scenarios with random directives. Every feasible plan must pass Replay.
 - `tests/test_api.py`: response contract, escalation, strong-model-wins, degraded mode, 502 without leaking a stack trace, 400/422 handling, cache.
+- `tests/test_official_samples.py`: all 10 official samples. Reference directives go through the LP and Replay, and the cost must equal the reference. The tripwire must never contradict a reference reading.
 - `tests/test_tripwire.py`: tripwire readings of common phrasings, and that it abstains when a note is ambiguous.
 
 ### Public sample pack
-Put the official samples in `samples/` (one JSON per sample: the request at top level or under `request`, and the expected output under `expected`), then start the service and run:
+The official pack is at `samples/official/public_sample_cases.json`. Start the service, then run:
 
 ```bash
-python scripts/run_samples.py http://localhost:8080 samples
+python scripts/run_samples.py http://127.0.0.1:8080 samples/official
 ```
+
+Current result: **10/10 pass**, each with the reference interpretation and the exact reference cost. The slowest sample takes 3.7 s. `tests/test_official_samples.py` also checks offline that the LP reaches every reference cost exactly.
 
 For each sample it checks three things:
 - the interpretation equals the expected `directive_type`, hours and values;
 - the returned plan passes an independent Replay;
 - the cost is ≤ the expected optimum + 0.01 BDT.
 
-Equivalent optimal schedules are accepted, as the official rules allow. Expected output: `N/N samples passed`.
+Equivalent optimal schedules are accepted, as the official rules allow. Expected output: `10/10 samples passed`.
 
 ### Paraphrase robustness eval (real LLM)
 ```bash
-OPENROUTER_API_KEY=... python -m eval.run_eval            # full cheap→tripwire→strong pipeline
-OPENROUTER_API_KEY=... python -m eval.run_eval --strong-only
+python -m eval.run_eval                 # full cheap→tripwire→strong pipeline
+python -m eval.run_eval --pace 20       # wait 20 s between batches (free-tier rate limits)
+python -m eval.run_eval --strong-only
 ```
+Current result: **42/42 correct** (7 batches confirmed on the cheap tier, 9 escalated; Groq serving).
 It runs 42 hand-labelled paraphrases covering all six directive types: fractions ("one-fifth"), "reduction" vs "remaining", 24-hour clock, noon/midnight, overnight wrap, "onwards", % of capacity, and "tomorrow" distractors. It prints every miss and the overall score.
 
 ## HTTP behaviour
@@ -186,11 +198,12 @@ Error bodies are `{"error": "<code>", "message": "<safe text>"}`. They never con
 FastAPI, Uvicorn, Pydantic v2, SciPy (HiGHS), NumPy, httpx. Pytest for development. Versions are pinned in `requirements*.txt`.
 
 ## Secret handling
-- The only secret is `OPENROUTER_API_KEY`. It's read from the environment at request time, never logged, and never returned in a response.
+- The only secrets are the provider keys (`OPENROUTER_API_KEY`, `GROQ_API_KEY`). It's read from the environment at request time, never logged, and never returned in a response.
 - `.env` files are git-ignored and docker-ignored. `.env.example` lists variable names only.
 - The Docker image and repository contain no credentials. Fly stores the key with `fly secrets`.
 
 ## Known limitations
+- The free Groq tier allows about 8k tokens per minute per model (3–4 interpretations). Under sustained load the chain moves to the next model, and eventually to degraded mode. A funded OpenRouter key removes this limit.
 - The interpretation cache is per process and in memory. It resets on restart and isn't shared between workers.
 - A note that could reasonably mean two different directives is resolved by the strong model's reading. The tripwire only ever triggers escalation.
 - Times with minutes round outward to whole hours ("until 3:30 PM" covers hour 15). Overnight windows wrap within the same 24-hour day.
@@ -201,7 +214,7 @@ FastAPI, Uvicorn, Pydantic v2, SciPy (HiGHS), NumPy, httpx. Pytest for developme
 ```
 app/main.py          HTTP layer, status codes, orchestration
 app/schemas.py       exact request/response contract
-app/llm.py           OpenRouter client, prompt, JSON schema for raw readings
+app/llm.py           provider-chain client (OpenRouter/Groq/OpenAI), prompt, JSON schema
 app/interpreter.py   cheap → tripwire → strong escalation, degraded mode, cache
 app/tripwire.py      pattern-based reading used as a check
 app/directives.py    guardrail: raw reading → Directive; per-hour constraint merge

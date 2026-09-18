@@ -1,22 +1,73 @@
-"""OpenRouter client. The LLM returns Raw Readings only; app.directives does the arithmetic."""
+"""Provider-agnostic LLM client (OpenAI-compatible chat APIs).
+
+The LLM returns Raw Readings only; app.directives does the arithmetic.
+Each tier is an ordered chain of (provider, models). Providers are tried in
+order until one returns a parseable reading; a provider that answers
+401/402/403 (dead account) is skipped for a long cool-down; a model that
+answers 429 (rate limit) is skipped only until its Retry-After (capped).
+"""
 import json
 import logging
 import os
 import re
+import time
+from dataclasses import dataclass
 
 import httpx
 
 log = logging.getLogger("gridwise.llm")
 
-OPENROUTER_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1") + "/chat/completions"
+
+@dataclass(frozen=True)
+class Provider:
+    name: str
+    base_url: str
+    key_env: str
+    model_list_routing: bool = False  # OpenRouter: send all models in one request via "models"
 
 
-def _models(var: str, default: str) -> list[str]:
-    return [m.strip() for m in os.getenv(var, default).split(",") if m.strip()]
+PROVIDERS = {
+    "openrouter": Provider("openrouter", os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+                           "OPENROUTER_API_KEY", model_list_routing=True),
+    "groq": Provider("groq", os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"), "GROQ_API_KEY"),
+    "openai": Provider("openai", os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"), "OPENAI_API_KEY"),
+}
 
 
-CHEAP_MODELS = _models("LLM_CHEAP_MODELS", "openai/gpt-4.1-mini,google/gemini-2.5-flash")
-STRONG_MODELS = _models("LLM_STRONG_MODELS", "anthropic/claude-sonnet-5,anthropic/claude-sonnet-4.6")
+def parse_chain(spec: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """'openrouter:a/b|c/d,groq:e/f' -> (('openrouter', ('a/b', 'c/d')), ('groq', ('e/f',)))"""
+    chain = []
+    for entry in spec.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        provider, _, models = entry.partition(":")
+        if provider not in PROVIDERS or not models:
+            raise ValueError(f"bad LLM chain entry {entry!r}")
+        chain.append((provider, tuple(m.strip() for m in models.split("|") if m.strip())))
+    return tuple(chain)
+
+
+CHEAP_CHAIN = parse_chain(os.getenv(
+    "LLM_CHEAP_CHAIN",
+    "openrouter:openai/gpt-4.1-mini|google/gemini-2.5-flash,groq:openai/gpt-oss-20b|qwen/qwen3.8-27b"))
+STRONG_CHAIN = parse_chain(os.getenv(
+    "LLM_STRONG_CHAIN",
+    "openrouter:anthropic/claude-sonnet-5|anthropic/claude-sonnet-4.6,groq:openai/gpt-oss-120b|openai/gpt-oss-20b"))
+COOLDOWN_S = float(os.getenv("LLM_PROVIDER_COOLDOWN_S", "300"))
+RATE_LIMIT_MAX_WAIT_S = 30.0
+_cooldown_until: dict[str, float] = {}  # "provider" or "provider:model" -> monotonic time
+
+
+def _cooling(key: str) -> bool:
+    return _cooldown_until.get(key, 0) > time.monotonic()
+
+
+def _retry_after(r: httpx.Response) -> float:
+    try:
+        return min(max(float(r.headers.get("retry-after", "10")), 1.0), RATE_LIMIT_MAX_WAIT_S)
+    except ValueError:
+        return 10.0
 
 
 class LLMError(Exception):
@@ -108,36 +159,77 @@ def _extract_json(text: str):
     return json.loads(text[start:end + 1])
 
 
-async def read_notes(client: httpx.AsyncClient, notes: list[str], models: list[str], timeout: float,
-                     feedback: str | None = None) -> tuple[list, str]:
-    """One batched call for all notes. Returns (readings, model_used)."""
-    key = os.getenv("OPENROUTER_API_KEY")
-    if not key:
-        raise LLMError("OPENROUTER_API_KEY is not set")
+def _payload(provider: Provider, model: str, models: tuple[str, ...], notes: list[str], feedback: str | None) -> dict:
     payload = {
-        "model": models[0],
-        "models": models,  # OpenRouter falls through this list on provider errors
+        "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": _user_message(notes, feedback)},
         ],
         "temperature": 0,
-        "max_tokens": 1500,
         "response_format": {"type": "json_schema",
                             "json_schema": {"name": "raw_readings", "strict": True, "schema": READING_SCHEMA}},
     }
-    try:
-        r = await client.post(OPENROUTER_URL, json=payload, timeout=timeout,
-                              headers={"Authorization": f"Bearer {key}", "X-Title": "GridWise"})
-    except httpx.HTTPError as e:
-        raise LLMError(f"provider request failed: {type(e).__name__}") from None
+    if provider.model_list_routing:
+        payload["models"] = list(models)  # OpenRouter falls through this list on provider errors
+        payload["max_tokens"] = 1500
+    else:
+        payload["max_completion_tokens"] = 3000
+    if "gpt-oss" in model:
+        payload["reasoning_effort"] = "low"
+    return payload
+
+
+async def _call(client: httpx.AsyncClient, provider: Provider, model: str, models: tuple[str, ...],
+                notes: list[str], timeout: float, feedback: str | None) -> list:
+    key = os.getenv(provider.key_env)
+    r = await client.post(f"{provider.base_url}/chat/completions", timeout=timeout,
+                          json=_payload(provider, model, models, notes, feedback),
+                          headers={"Authorization": f"Bearer {key}", "X-Title": "GridWise"})
+    if r.status_code in (401, 402, 403):
+        _cooldown_until[provider.name] = time.monotonic() + COOLDOWN_S
+    elif r.status_code == 429:
+        _cooldown_until[f"{provider.name}:{model}"] = time.monotonic() + _retry_after(r)
     if r.status_code != 200:
-        raise LLMError(f"provider returned HTTP {r.status_code}")
+        raise LLMError(f"{provider.name} returned HTTP {r.status_code}")
     try:
-        data = r.json()
-        content = data["choices"][0]["message"]["content"]
+        content = r.json()["choices"][0]["message"]["content"]
         parsed = _extract_json(content if isinstance(content, str) else json.dumps(content))
-        readings = parsed["readings"] if isinstance(parsed, dict) else parsed
+        return parsed["readings"] if isinstance(parsed, dict) else parsed
     except (KeyError, IndexError, TypeError, ValueError) as e:
-        raise LLMError(f"unparseable model output: {type(e).__name__}") from None
-    return readings, data.get("model", models[0])
+        raise LLMError(f"{provider.name} gave unparseable output: {type(e).__name__}") from None
+
+
+async def read_notes(client: httpx.AsyncClient, notes: list[str], chain, timeout: float,
+                     feedback: str | None = None) -> tuple[list, str]:
+    """One batched call for all notes, walking the provider chain within `timeout` seconds.
+
+    Returns (readings, "provider:model").
+    """
+    deadline = time.monotonic() + timeout
+    errors = []
+    for provider_name, models in chain:
+        provider = PROVIDERS[provider_name]
+        if not os.getenv(provider.key_env):
+            continue
+        if _cooling(provider_name):
+            errors.append(f"{provider_name} cooling down")
+            continue
+        targets = models[:1] if provider.model_list_routing else models
+        for model in targets:
+            if _cooling(f"{provider_name}:{model}"):
+                errors.append(f"{provider_name}:{model} rate-limited")
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining < 0.5:
+                raise LLMError("; ".join(errors + ["tier timeout"]))
+            try:
+                return await _call(client, provider, model, models, notes, remaining, feedback), f"{provider_name}:{model}"
+            except httpx.HTTPError as e:
+                errors.append(f"{provider_name} request failed: {type(e).__name__}")
+            except LLMError as e:
+                errors.append(str(e))
+            log.warning("LLM attempt failed: %s", errors[-1])
+            if _cooling(provider_name):
+                break
+    raise LLMError("; ".join(errors) or "no LLM provider configured")

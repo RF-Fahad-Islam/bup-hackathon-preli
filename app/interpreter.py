@@ -104,17 +104,19 @@ async def interpret(client: httpx.AsyncClient, notes: list[str], battery: Batter
     sub = [notes[i] for i in pending]
     accepted: list[Directive] | None = None
     accepted_raw: list | None = None
+    unconfirmed: tuple[list[Directive], list] | None = None  # guardrail-valid cheap reading the tripwire didn't confirm
     path = "strong"
 
     if not force_strong:
         try:
-            raw, model = await llm.read_notes(client, sub, llm.CHEAP_MODELS, min(CHEAP_TIMEOUT, remaining()))
+            raw, model = await llm.read_notes(client, sub, llm.CHEAP_CHAIN, min(CHEAP_TIMEOUT, remaining()))
             cheap = interpretation_to_directives(raw, sub, battery)
             trip = _tripwire_directives(sub, battery)
             disagreements = [j for j, (c, t) in enumerate(zip(cheap, trip)) if t is None or not c.same_meaning(t)]
             if not disagreements:
                 accepted, accepted_raw, path = cheap, raw, "cheap"
             else:
+                unconfirmed = (cheap, raw)
                 log.info("escalating: tripwire disagrees on notes %s (cheap model %s)", disagreements, model)
         except (llm.LLMError, GuardrailError) as e:
             log.warning("cheap interpretation rejected: %s", e)
@@ -123,11 +125,16 @@ async def interpret(client: httpx.AsyncClient, notes: list[str], battery: Batter
         try:
             if remaining() < 1:
                 raise llm.LLMError("interpretation deadline reached")
-            raw, model = await llm.read_notes(client, sub, llm.STRONG_MODELS, min(STRONG_TIMEOUT, remaining()),
+            raw, model = await llm.read_notes(client, sub, llm.STRONG_CHAIN, min(STRONG_TIMEOUT, remaining()),
                                               feedback=feedback)
             accepted, accepted_raw, path = interpretation_to_directives(raw, sub, battery), raw, "strong"
         except (llm.LLMError, GuardrailError) as e:
             log.error("strong interpretation failed: %s", e)
+
+    if accepted is None and unconfirmed is not None:
+        # Strong model unavailable: a guardrail-valid LLM reading still beats pattern matching.
+        log.warning("using unconfirmed cheap reading for notes %s", pending)
+        (accepted, accepted_raw), path = unconfirmed, "cheap-unconfirmed"
 
     if accepted is None:
         trip = _tripwire_directives(sub, battery)
@@ -135,7 +142,7 @@ async def interpret(client: httpx.AsyncClient, notes: list[str], battery: Batter
             raise InterpretationUnavailable("language model unavailable and notes could not be read safely")
         log.error("DEGRADED MODE: using tripwire readings for notes %s", pending)
         accepted, path = trip, "degraded"
-    else:
+    elif path != "cheap-unconfirmed":  # only cache confirmed readings, so a later request can escalate
         by_idx = {r["note_index"]: r for r in accepted_raw}
         for j, orig in enumerate(pending):
             cache.put(notes[orig], by_idx[j])

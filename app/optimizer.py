@@ -94,7 +94,7 @@ def solve(hours: list[HourSlot], battery: BatterySpec, cons: HourlyConstraints) 
     throughput = np.zeros(N)
     throughput[C * H:(C + 1) * H] = 1
     throughput[D * H:(D + 1) * H] = 1
-    tol = 1e-7 * max(1.0, abs(s1.fun)) + 1e-6
+    tol = 1e-9 * max(1.0, abs(s1.fun)) + 1e-7
     s2 = linprog(throughput, A_ub=cost.reshape(1, -1), b_ub=[s1.fun + tol],
                  A_eq=a_eq, b_eq=b_eq, bounds=bounds, method="highs")
     x = s2.x if s2.status == 0 else s1.x

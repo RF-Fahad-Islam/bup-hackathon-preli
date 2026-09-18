@@ -34,7 +34,7 @@ def fake_llm(monkeypatch, cheap, strong=None):
     calls = []
 
     async def read_notes(client, notes, models, timeout, feedback=None):
-        tier = "cheap" if models == llm.CHEAP_MODELS else "strong"
+        tier = "cheap" if models == llm.CHEAP_CHAIN else "strong"
         calls.append(tier)
         out = cheap if tier == "cheap" else strong
         if isinstance(out, Exception):
@@ -89,6 +89,31 @@ def test_degraded_mode_when_all_llms_fail(client, monkeypatch):
     r = client.post("/optimize-energy", json=make_request(NOTES))
     assert r.status_code == 200
     assert r.json()["directive_interpretation"][0]["structured_adjustment"] == {"hours": [13, 14], "factor": 0.2}
+
+
+def test_unconfirmed_cheap_reading_used_when_strong_unavailable(client, monkeypatch):
+    note = ["Panel washing from one until three will leave roughly one-fifth of normal solar output."]
+    cheap = [dict(GOOD[0], solar_value=20, solar_meaning="remaining")]
+    calls = fake_llm(monkeypatch, cheap, llm.LLMError("HTTP 402"))
+    r = client.post("/optimize-energy", json=make_request(note))
+    assert r.status_code == 200
+    assert r.json()["directive_interpretation"][0]["structured_adjustment"] == {"hours": [13, 14], "factor": 0.2}
+    assert calls == ["cheap", "strong"]
+    client.post("/optimize-energy", json=make_request(note))
+    assert calls == ["cheap", "strong", "cheap", "strong"]  # unconfirmed readings are not cached
+
+
+def test_all_notes_explained_for_every_directive_type(client, monkeypatch):
+    readings = [
+        dict(GOOD[1], note_index=0, directive_type="no_charge_window", spans=[{"start_hour": 2, "end_hour": 5}]),
+        dict(GOOD[1], note_index=1, directive_type="no_discharge_window", spans=[{"start_hour": 18, "end_hour": 20}]),
+        dict(GOOD[1], note_index=2, directive_type="minimum_battery_reserve", spans=[{"start_hour": 18, "end_hour": 21}],
+             amount_value=50, amount_unit="percent_of_capacity"),
+    ]
+    fake_llm(monkeypatch, readings, readings)
+    r = client.post("/optimize-energy", json=make_request(["a", "b", "c"]))
+    assert r.status_code == 200, r.text
+    assert all(d["explanation"] for d in r.json()["directive_interpretation"])
 
 
 def test_502_when_llms_fail_and_tripwire_unsure(client, monkeypatch):

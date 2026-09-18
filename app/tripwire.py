@@ -147,7 +147,7 @@ def read_note(note: str) -> Optional[dict]:
     discharge = re.search(r"\bdischarg(e|er|ing)\b|\bdraw(ing)? (energy |power )?from the battery\b", t)
     grid = re.search(r"\b(grid|import|feeder|utility|substation|mains)\b", t)
     reserve = re.search(r"\b(reserve|keep at least|maintain at least|at least|minimum|not (?:drop|fall|go) below|stay above|backup)\b", t)
-    prohibit = re.search(r"\b(no|not|never|avoid|unavailable|offline|disabled|prohibited|forbidden|blocked|suspend\w*|pause\w*|must not|do not|don't|cannot|can't|locked|out of service|down)\b", t)
+    prohibit = re.search(r"\b(no|not|never|avoid|unavailable|offline|disabled|prohibited|forbidden|blocked|suspend\w*|pause\w*|must not|do not|don't|cannot|can't|locked|out of service|down|isolated|disconnected|switched off|shut down|out of action)\b", t)
     cap = re.search(r"\b(exceed|cap(ped)?|limit(ed)?|max(imum)?|no more than|at most|not go above|below|under|restrict\w*|ceiling)\b", t)
 
     energy_words = solar or charge or discharge or grid or reserve or re.search(r"\bbattery\b", t)
@@ -164,7 +164,7 @@ def read_note(note: str) -> Optional[dict]:
         if re.search(r"\b(reduc\w*|cut|drop|decreas\w*|lower\w*|los[se]\w*|fall|fell)\s+(?:of\s+|by\s+)(?:about\s+|around\s+|roughly\s+|approximately\s+|nearly\s+|~)?\d", t) \
                 or re.search(r"\d\s*(?:%|percent|per cent)\s+(reduction|cut|drop|decrease|loss|lower|less)", t):
             meaning = "reduction"
-        elif re.search(r"\b(to|at|of (normal|usual|typical|its|rated|expected)|remain\w*|only|just|left)\b", t):
+        elif re.search(r"\b(to|at|as|leav\w*|of (the )?(normal|usual|typical|its|rated|expected|forecast\w*)|remain\w*|only|just|left)\b", t):
             meaning = "remaining"
         else:
             return None

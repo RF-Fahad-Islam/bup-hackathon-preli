@@ -19,13 +19,16 @@ def explain(d: Directive) -> str:
         text = "Does not affect today's energy schedule; no constraint applied."
     else:
         when = _hours_text(d.hours)
-        text = {
-            "solar_reduction": f"Usable solar limited to {d.value:g}x of forecast during {when}.",
-            "minimum_battery_reserve": f"Battery kept at or above {d.value:g} kWh after each hour in {when}.",
-            "no_charge_window": f"Battery charging prohibited during {when}.",
-            "no_discharge_window": f"Battery discharging prohibited during {when}.",
-            "max_grid_window": f"Grid import capped at {d.value:g} kWh per hour during {when}.",
-        }[t]
+        if t == "solar_reduction":
+            text = f"Usable solar limited to {d.value:g}x of forecast during {when}."
+        elif t == "minimum_battery_reserve":
+            text = f"Battery kept at or above {d.value:g} kWh after each hour in {when}."
+        elif t == "no_charge_window":
+            text = f"Battery charging prohibited during {when}."
+        elif t == "no_discharge_window":
+            text = f"Battery discharging prohibited during {when}."
+        else:
+            text = f"Grid import capped at {d.value:g} kWh per hour during {when}."
     if d.source == "tripwire":
         text += " (Degraded mode: language model unavailable, read by pattern fallback.)"
     elif d.reason:

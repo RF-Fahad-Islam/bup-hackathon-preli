@@ -1,11 +1,12 @@
 """Run the public sample pack against a running service and judge each response.
 
-Usage:  python scripts/run_samples.py [BASE_URL] [SAMPLES_DIR]
-        (defaults: http://localhost:8080  samples/)
+Usage:  python scripts/run_samples.py [BASE_URL] [SAMPLES_PATH]
+        (defaults: http://localhost:8080  samples/official)
 
-Each sample is a JSON file holding the request, either at the top level or under
-"request"/"input", plus an optional expected output under "expected"/"expected_output"/"output".
-A sibling "<name>.expected.json" / "<name>_expected.json" is also picked up.
+SAMPLES_PATH is a JSON file or a folder of JSON files. A file is either the
+official pack ({"cases": [{"id", "input", "expected_output"}, ...]}) or a single
+sample: the request at the top level or under "request"/"input", plus an
+optional expected output under "expected"/"expected_output"/"output".
 For each sample it checks: interpretation matches expected (type, hours, values),
 the plan replays cleanly, and cost is within 0.01 BDT of the expected optimum.
 """
@@ -26,15 +27,22 @@ KEYS_REQ = ("request", "input")
 KEYS_EXP = ("expected", "expected_output", "expected_response", "output", "response")
 
 
-def load(path: Path):
-    data = json.loads(path.read_text(encoding="utf-8"))
+def split(data: dict):
     req = next((data[k] for k in KEYS_REQ if k in data), data)
     exp = next((data[k] for k in KEYS_EXP if k in data), None)
-    for suffix in (".expected.json", "_expected.json"):
-        side = path.with_name(path.name.replace(".json", suffix))
-        if side.exists():
-            exp = json.loads(side.read_text(encoding="utf-8"))
     return req, exp
+
+
+def load_all(target: Path):
+    """Yield (name, request, expected) for every sample under target."""
+    files = sorted(target.glob("*.json")) if target.is_dir() else [target]
+    for path in files:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("cases"), list):
+            for case in data["cases"]:
+                yield (case.get("id") or case["input"]["scenario_id"], *split(case))
+        else:
+            yield (path.name, *split(data))
 
 
 def adjustment_to_raw(di):
@@ -67,16 +75,16 @@ def same_adjustment(a, b):
 
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8080"
-    folder = Path(sys.argv[2] if len(sys.argv) > 2 else "samples")
-    files = sorted(p for p in folder.glob("*.json") if not p.name.endswith(("expected.json",)))
-    if not files:
-        sys.exit(f"no sample files in {folder}/")
-    passed = 0
-    for path in files:
-        req, exp = load(path)
+    target = Path(sys.argv[2] if len(sys.argv) > 2 else "samples/official")
+    samples = list(load_all(target))
+    if not samples:
+        sys.exit(f"no samples found in {target}")
+    passed, latencies = 0, []
+    for name, req, exp in samples:
         t0 = time.monotonic()
         r = httpx.post(f"{base}/optimize-energy", json=req, timeout=35)
         dt = time.monotonic() - t0
+        latencies.append(dt)
         problems = []
         if r.status_code != 200:
             problems.append(f"HTTP {r.status_code}: {r.text[:200]}")
@@ -98,15 +106,15 @@ def main():
                             or not same_adjustment(got["structured_adjustment"], want["structured_adjustment"]):
                         problems.append(f"note {got['note_index']}: got {got['directive_type']} "
                                         f"{got['structured_adjustment']}, want {want['directive_type']} {want['structured_adjustment']}")
-                if "total_cost_bdt" in exp and body["total_cost_bdt"] > exp["total_cost_bdt"] + 0.01:
-                    problems.append(f"cost {body['total_cost_bdt']} > expected optimum {exp['total_cost_bdt']}")
+                if "total_cost_bdt" in exp and abs(body["total_cost_bdt"] - exp["total_cost_bdt"]) > 0.01:
+                    problems.append(f"cost {body['total_cost_bdt']} != reference optimum {exp['total_cost_bdt']}")
         status = "PASS" if not problems else "FAIL"
         passed += not problems
-        print(f"{status} {path.name} ({dt:.2f}s)")
+        print(f"{status} {name} ({dt:.2f}s)")
         for p in problems:
             print(f"     - {p}")
-    print(f"\n{passed}/{len(files)} samples passed")
-    sys.exit(0 if passed == len(files) else 1)
+    print(f"\n{passed}/{len(samples)} samples passed; max latency {max(latencies):.2f}s")
+    sys.exit(0 if passed == len(samples) else 1)
 
 
 if __name__ == "__main__":

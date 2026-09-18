@@ -1,6 +1,7 @@
 """Paraphrase robustness eval: runs the real interpretation pipeline on labelled notes.
 
-Usage:  OPENROUTER_API_KEY=... python -m eval.run_eval [--strong-only]
+Usage:  OPENROUTER_API_KEY=... GROQ_API_KEY=... python -m eval.run_eval [--strong-only] [--pace SECONDS]
+(--pace waits between batches, e.g. to stay inside a free tier's tokens-per-minute limit)
 Notes are sent in batches of 3 (the maximum per scenario), with the cache disabled.
 """
 import asyncio
@@ -16,7 +17,7 @@ from app.schemas import BatterySpec
 HERE = Path(__file__).parent
 
 
-async def main(force_strong: bool):
+async def main(force_strong: bool, pace: float):
     cases = [json.loads(line) for line in (HERE / "paraphrases.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     ok, paths = 0, {}
     async with httpx.AsyncClient() as client:
@@ -26,6 +27,8 @@ async def main(force_strong: bool):
             batch = [cases[i]]
             while len(batch) < 3 and i + len(batch) < len(cases) and cases[i + len(batch)].get("capacity", 200) == cap:
                 batch.append(cases[i + len(batch)])
+            if i and pace:
+                await asyncio.sleep(pace)
             i += len(batch)
             battery = BatterySpec(capacity_kwh=cap, initial_energy_kwh=cap / 2, minimum_energy_kwh=0,
                                   max_charge_kwh_per_hour=cap / 4, max_discharge_kwh_per_hour=cap / 4)
@@ -47,4 +50,5 @@ async def main(force_strong: bool):
 
 
 if __name__ == "__main__":
-    asyncio.run(main("--strong-only" in sys.argv))
+    pace = float(sys.argv[sys.argv.index("--pace") + 1]) if "--pace" in sys.argv else 0.0
+    asyncio.run(main("--strong-only" in sys.argv, pace))
