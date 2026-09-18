@@ -50,10 +50,10 @@ def parse_chain(spec: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
 
 CHEAP_CHAIN = parse_chain(os.getenv(
     "LLM_CHEAP_CHAIN",
-    "openrouter:openai/gpt-4.1-mini|google/gemini-2.5-flash,groq:openai/gpt-oss-20b|qwen/qwen3.8-27b"))
+    "groq:openai/gpt-oss-20b|qwen/qwen3.8-27b,openrouter:openai/gpt-4.1-mini|google/gemini-2.5-flash"))
 STRONG_CHAIN = parse_chain(os.getenv(
     "LLM_STRONG_CHAIN",
-    "openrouter:anthropic/claude-sonnet-5|anthropic/claude-sonnet-4.6,groq:openai/gpt-oss-120b|openai/gpt-oss-20b"))
+    "groq:openai/gpt-oss-120b|openai/gpt-oss-20b,openrouter:anthropic/claude-sonnet-5|anthropic/claude-sonnet-4.6"))
 COOLDOWN_S = float(os.getenv("LLM_PROVIDER_COOLDOWN_S", "300"))
 RATE_LIMIT_MAX_WAIT_S = 30.0
 _cooldown_until: dict[str, float] = {}  # "provider" or "provider:model" -> monotonic time
