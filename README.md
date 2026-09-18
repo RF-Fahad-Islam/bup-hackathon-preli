@@ -5,43 +5,32 @@
 BUP CSE Fest 2026 · GridWise preliminary.
 
 **Contents:**
-[Overview](#overview) ·
-
-[Architecture](#architecture) ·
-
-[Request Processing Flow](#request-processing-flow) ·
-
-[Tech Stack](#tech-stack) ·
-
-[LLM & Model](#llm--model) ·
-
-[Directive Interpretation](#directive-interpretation) ·
-
-[Deterministic Guardrails](#deterministic-guardrails) ·
-
-[Optimization Model](#optimization-model) ·
-
-[Final Validation](#final-validation) ·
-
-[Environment Variables](#environment-variables) ·
-
-[Local Quickstart](#local-quickstart) ·
-
-[API](#api) ·
-
-[Testing](#testing) ·
-
-[Docker Fallback](#docker-fallback) ·
-
-[Error Handling](#error-handling) ·
-
-[Performance Notes](#performance-notes) ·
-
-[Security & Secret Handling](#security--secret-handling) ·
-
-[Known Limitations](#known-limitations) ·
-
-[Dependencies / Credits](#dependencies--credits)
+README
+├── [Overview](#overview)
+├── [Architecture](#architecture)
+│   └── [Request Processing Flow](#request-processing-flow)
+├── Technical Design
+│   ├── [Tech Stack](#tech-stack)
+│   ├── [LLM & Model](#llm--model)
+│   ├── [Directive Interpretation](#directive-interpretation)
+│   ├── [Deterministic Guardrails](#deterministic-guardrails)
+│   ├── [Optimization Model](#optimization-model)
+│   └── [Final Validation](#final-validation)
+├── Setup
+│   ├── [Environment Variables](#environment-variables)
+│   ├── [Local Quickstart](#local-quickstart)
+│   └── [Docker Fallback](#docker-fallback)
+├── Interface
+│   └── [API](#api)
+├── Quality Assurance
+│   ├── [Testing](#testing)
+│   ├── [Error Handling](#error-handling)
+│   └── [Performance Notes](#performance-notes)
+├── Security
+│   └── [Security & Secret Handling](#security--secret-handling)
+└── Project Notes
+    ├── [Known Limitations](#known-limitations)
+    └── [Dependencies / Credits](#dependencies--credits)
 
 ---
 
