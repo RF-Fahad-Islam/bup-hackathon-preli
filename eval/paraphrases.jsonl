@@ -1,0 +1,42 @@
+{"note": "PV production will drop to about 20% between 13:00 and 15:00.", "type": "solar_reduction", "hours": [13, 14], "value": 0.2}
+{"note": "Panel washing from one until three will leave roughly one-fifth of normal solar output.", "type": "solar_reduction", "hours": [13, 14], "value": 0.2}
+{"note": "Expect an 80% reduction in rooftop solar during the 1–3 PM maintenance window.", "type": "solar_reduction", "hours": [13, 14], "value": 0.2}
+{"note": "Rooftop solar will only deliver 40% of its forecast from 11 AM to 2 PM because of inverter servicing.", "type": "solar_reduction", "hours": [11, 12, 13], "value": 0.4}
+{"note": "Heavy cloud cover is expected to cut solar generation by half between noon and 4 PM.", "type": "solar_reduction", "hours": [12, 13, 14, 15], "value": 0.5}
+{"note": "Solar array fully offline for cleaning 10:00-12:00.", "type": "solar_reduction", "hours": [10, 11], "value": 0.0}
+{"note": "A 75 percent loss of PV output is expected from 9 AM to 11 AM while scaffolding shades the panels.", "type": "solar_reduction", "hours": [9, 10], "value": 0.25}
+{"note": "Only a quarter of the usual solar will be usable during 2pm-5pm.", "type": "solar_reduction", "hours": [14, 15, 16], "value": 0.25}
+{"note": "Dust storm: solar output reduced by 60% from 8 in the morning until 1 in the afternoon.", "type": "solar_reduction", "hours": [8, 9, 10, 11, 12], "value": 0.4}
+{"note": "Between 12 and 2 PM the panels will produce 30% of normal.", "type": "solar_reduction", "hours": [12, 13], "value": 0.3}
+{"note": "Battery charger unavailable from 2 AM until 5 AM.", "type": "no_charge_window", "hours": [2, 3, 4], "value": null}
+{"note": "Do not charge the battery between 00:00 and 03:00 due to BMS firmware update.", "type": "no_charge_window", "hours": [0, 1, 2], "value": null}
+{"note": "Charging is suspended from 10 PM to 2 AM for transformer checks.", "type": "no_charge_window", "hours": [0, 1, 22, 23], "value": null}
+{"note": "The charging circuit will be isolated for inspection from 1 PM until 4 PM.", "type": "no_charge_window", "hours": [13, 14, 15], "value": null}
+{"note": "No battery charging allowed 11am–1pm while electricians work on the charger.", "type": "no_charge_window", "hours": [11, 12], "value": null}
+{"note": "Charger maintenance: the battery cannot take energy in during hours 4 to 7.", "type": "no_charge_window", "hours": [4, 5, 6], "value": null}
+{"note": "Do not discharge the battery from 6 PM until 8 PM.", "type": "no_discharge_window", "hours": [18, 19], "value": null}
+{"note": "The battery must not supply the load between 19:00 and 22:00 while the inverter is tested.", "type": "no_discharge_window", "hours": [19, 20, 21], "value": null}
+{"note": "Discharging is prohibited from 5 PM to 7 PM for a safety drill.", "type": "no_discharge_window", "hours": [17, 18], "value": null}
+{"note": "Hold the battery — no drawing energy from it between noon and 3 PM.", "type": "no_discharge_window", "hours": [12, 13, 14], "value": null}
+{"note": "Battery output locked out from 8 PM onwards for the rest of the day.", "type": "no_discharge_window", "hours": [20, 21, 22, 23], "value": null}
+{"note": "Keep at least 120 kWh in reserve from 6 PM until 9 PM.", "type": "minimum_battery_reserve", "hours": [18, 19, 20], "value": 120}
+{"note": "Keep at least 50% of battery capacity in reserve from 7 PM to 10 PM.", "type": "minimum_battery_reserve", "hours": [19, 20, 21], "value": 100, "capacity": 200}
+{"note": "Maintain a backup reserve of no less than 80 kWh between 20:00 and 23:00 in case of outages.", "type": "minimum_battery_reserve", "hours": [20, 21, 22], "value": 80}
+{"note": "The battery should not fall below a quarter of its capacity from 5 PM until 9 PM.", "type": "minimum_battery_reserve", "hours": [17, 18, 19, 20], "value": 125, "capacity": 500}
+{"note": "Ensure the stored energy stays above 150 kWh from midnight to 6 AM for the server room backup.", "type": "minimum_battery_reserve", "hours": [0, 1, 2, 3, 4, 5], "value": 150}
+{"note": "Hold 60% state of charge between 2 PM and 4 PM for the lab experiment.", "type": "minimum_battery_reserve", "hours": [14, 15], "value": 240, "capacity": 400}
+{"note": "Grid import must not exceed 155 kWh from 6 PM until 9 PM.", "type": "max_grid_window", "hours": [18, 19, 20], "value": 155}
+{"note": "The utility has asked us to cap grid draw at 200 kWh per hour between 17:00 and 20:00.", "type": "max_grid_window", "hours": [17, 18, 19], "value": 200}
+{"note": "Demand-response event: keep imports from the grid at or below 90 kWh 2–4 PM.", "type": "max_grid_window", "hours": [14, 15], "value": 90}
+{"note": "Feeder limit: no more than 250 kWh from the grid in any hour from 6 AM to 9 AM.", "type": "max_grid_window", "hours": [6, 7, 8], "value": 250}
+{"note": "Substation work means grid supply is limited to 120 kWh per hour from 11 AM until 1 PM.", "type": "max_grid_window", "hours": [11, 12], "value": 120}
+{"note": "The cafeteria menu changes tomorrow.", "type": "no_op", "hours": [], "value": null}
+{"note": "Remember the staff meeting at 3 PM in the main hall.", "type": "no_op", "hours": [], "value": null}
+{"note": "Solar panel cleaning is scheduled for next Tuesday.", "type": "no_op", "hours": [], "value": null}
+{"note": "The battery vendor will visit tomorrow to discuss the warranty.", "type": "no_op", "hours": [], "value": null}
+{"note": "Library opening hours are extended until 10 PM during exam week.", "type": "no_op", "hours": [], "value": null}
+{"note": "Solar and battery systems are operating normally today.", "type": "no_op", "hours": [], "value": null}
+{"note": "Parking lot B will be closed for repainting from 9 AM to noon.", "type": "no_op", "hours": [], "value": null}
+{"note": "The electricity tariff sheet was updated on the notice board.", "type": "no_op", "hours": [], "value": null}
+{"note": "Tomorrow the grid import cap of 100 kWh will apply from 6 to 9 PM.", "type": "no_op", "hours": [], "value": null}
+{"note": "Guest lecture on renewable energy at 2 PM in room 301.", "type": "no_op", "hours": [], "value": null}
